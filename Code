@@ -1,0 +1,58 @@
+import cv2
+import numpy as np
+
+# Blue color range in HSV
+lower_color = np.array([100, 150, 0])
+upper_color = np.array([140, 255, 255])
+
+cap = cv2.VideoCapture(0)
+canvas = None
+prev_center = None
+
+while True:
+    ret, frame = cap.read()
+    frame = cv2.flip(frame, 1)
+
+    if not ret:
+        break
+
+    if canvas is None:
+        canvas = np.zeros_like(frame)
+
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lower_color, upper_color)
+
+    # Optional: clean up mask
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        contour = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(contour) > 50:  # 👈 LOWERED from 500 to 50
+            (x, y), _ = cv2.minEnclosingCircle(contour)
+            center = (int(x), int(y))
+
+            if prev_center:
+                cv2.line(canvas, prev_center, center, (255, 0, 0), 5)
+
+            prev_center = center
+            cv2.circle(frame, center, 8, (255, 255, 255), -1)
+        else:
+            prev_center = None
+    else:
+        prev_center = None
+
+    output = cv2.add(frame, canvas)
+    cv2.imshow("Blue Drawing (Far Objects OK) | Q: Quit | C: Clear", output)
+
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        break
+    elif key == ord('c'):
+        canvas = np.zeros_like(frame)
+
+cap.release()
+cv2.destroyAllWindows()
